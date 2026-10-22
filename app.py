@@ -69,7 +69,7 @@ async def handler(event):
 更换默认下载目录: <code>/path 绝对路径（如 /root/）</code>
 ADMIN_ID:<code>{event.chat_id}</code>
     ''', parse_mode='html', buttons=[
-        Button.url('更多帮助', 'https://github.com/jw-star/aria2bot')
+        Button.url('更多帮助', 'https://github.com/github-xihe/aria2bot')
     ])
 
 

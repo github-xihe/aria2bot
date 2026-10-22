@@ -49,7 +49,7 @@ curl -fsSL get.docker.com -o get-docker.sh&&sh get-docker.sh &&systemctl enable 
 下载库到本地
 
 ```bash
-git clone https://github.com/jw-star/aria2bot.git
+git clone https://github.com/github-xihe/aria2bot.git
 ```
 
 删除容器（如果容器存在）
