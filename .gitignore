@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 本地真实配置与会话文件
+db/config.yml
+db/*.session
+db/*.session-journal
