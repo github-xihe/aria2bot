@@ -109,7 +109,7 @@ async def send_welcome(event):
                 uris=[url],
             )
     elif text.startswith('magnet'):
-        pattern_res = re.findall('magnet:\?xt=urn:btih:[0-9a-fA-F]{40,}.*', text)
+        pattern_res = re.findall(r'magnet:\?xt=urn:btih:[0-9a-fA-F]{40,}.*', text)
         for text in pattern_res:
             await client.add_uri(
                 uris=[text],
