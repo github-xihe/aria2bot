@@ -5,6 +5,7 @@ import logging
 import re
 import shutil
 from typing import Any
+from urllib.parse import urlparse
 
 import python_socks
 
@@ -14,7 +15,7 @@ from telethon.tl.functions.bots import SetBotCommandsRequest
 from telethon.tl.types import BotCommand, BotCommandScopeDefault, Message
 
 from async_aria2_client import AsyncAria2Client
-from configer import API_ID, API_HASH, PROXY_IP, PROXY_PORT, BOT_TOKEN, ADMIN_ID, RPC_SECRET, RPC_URL
+from configer import API_ID, API_HASH, PROXY_IP, PROXY_PORT, BOT_TOKEN, ADMIN_ID, RPC_SECRET, RPC_URL, ARIANG_BASE
 from util import get_file_name, progress, byte2_readable, hum_convert
 
 coloredlogs.install(level='INFO')
@@ -34,7 +35,14 @@ async def handler(event):
 @bot.on(events.NewMessage(pattern="/web", from_users=ADMIN_ID))
 async def handler(event):
     base_key = base64.b64encode(RPC_SECRET.encode("utf-8")).decode('utf-8')
-    await event.respond(f'http://ariang.js.org/#!/settings/rpc/set/ws/{RPC_URL.replace(":", "/", 1)}/{base_key}')
+    # RPC_URL 形如 127.0.0.1:6808/jsonrpc；AriaNg 深链需要 host/port/path 分开
+    host_port, _, rpc_path = RPC_URL.partition('/')
+    rpc_port = host_port.partition(':')[2] or '6808'
+    # 手机点开时 127.0.0.1 指向手机自己，改用 AriaNg 所在主机的地址
+    ws_host = urlparse(ARIANG_BASE).hostname or host_port.partition(':')[0]
+    await event.respond(
+        f'{ARIANG_BASE.rstrip("/")}/#!/settings/rpc/set/ws/{ws_host}/{rpc_port}/{rpc_path}/{base_key}'
+    )
 
 
 @bot.on(events.NewMessage(pattern="/info", from_users=ADMIN_ID))

@@ -13,3 +13,5 @@ FORWARD_ID = result['FORWARD_ID']
 UP_TELEGRAM = result['UP_TELEGRAM']
 RPC_SECRET = result['RPC_SECRET']
 RPC_URL = result['RPC_URL']
+# AriaNg 前端地址（/web 深链用）：本地部署优先，留空则回退到 ariang.js.org
+ARIANG_BASE = result.get('ARIANG_BASE') or 'http://ariang.js.org'

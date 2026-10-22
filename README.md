@@ -32,6 +32,8 @@ UP_TELEGRAM: true
 #aria2c 设置
 RPC_SECRET: xxxxxxx
 RPC_URL: xxxxxx:6800/jsonrpc
+#AriaNg 前端地址（/web 命令生成深链用）；本地部署填局域网地址，留空则用 ariang.js.org
+ARIANG_BASE: http://192.168.1.10:6880
 
 #代理ip 不需要留空,目前代理只支持代理bot，aria2c 连接不支持代理目前
 PROXY_IP: 
