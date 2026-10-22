@@ -36,7 +36,9 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # 包由用户首次手动推送创建，GITHUB_TOKEN 无该包的写权限；
+          # 使用仓库 Secret GHCR_TOKEN（PAT，write:packages）登录
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Extract metadata (tags, labels)
         id: meta
