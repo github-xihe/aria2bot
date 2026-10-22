@@ -1,7 +1,7 @@
 services:
   aria2bot:
-    # 改成你自己的 Docker Hub 仓库，例如 ghcr.io/your-name/aria2bot:latest
-    image: YOUR_DOCKERHUB_USER/aria2bot:latest
+    # 预构建镜像（linux/amd64），需要自己构建时把 image 换成 your-name/aria2bot:latest 并保留 build
+    image: ghcr.io/github-xihe/aria2bot:latest
     network_mode: host
     container_name: aria2bot
     restart: always

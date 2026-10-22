@@ -72,6 +72,7 @@ docker compose logs -f --tail=4000
 
 ### 镜像说明（2026-10 安全基线升级）
 
+- 预构建镜像：`ghcr.io/github-xihe/aria2bot:latest`（linux/amd64）
 - 基础镜像：`python:3.13-slim-trixie`（Debian 13），替换已 EOL 的 `python:3.11.3-slim-buster`
 - 依赖升级并锁定：`aiohttp 3.14.5` / `telethon 1.45.0` / `websockets 13.1`（去掉代码中未使用的 `websocket-client`、`async_timeout`）
 - 容器内以非 root 用户 `aria2bot`（uid/gid 1000）运行
