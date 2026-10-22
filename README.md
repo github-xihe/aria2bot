@@ -70,6 +70,29 @@ docker compose up -d --build
 docker compose logs -f --tail=4000
 ```
 
+### 镜像说明（2026-10 安全基线升级）
+
+- 基础镜像：`python:3.13-slim-trixie`（Debian 13），替换已 EOL 的 `python:3.11.3-slim-buster`
+- 依赖升级并锁定：`aiohttp 3.14.5` / `telethon 1.45.0` / `websockets 13.1`（去掉代码中未使用的 `websocket-client`、`async_timeout`）
+- 容器内以非 root 用户 `aria2bot`（uid/gid 1000）运行
+- 内置 ffmpeg 7.1，用于生成视频缩略图
+- 构建采用多阶段 + venv，镜像内不含编译工具链
+
+非 root 运行要求 `./db` 对该用户可写（Telegram 会话文件会写成 `db/bot.session`）：
+
+```bash
+sudo chown -R 1000:1000 ./db
+```
+
+如需匹配宿主机其他用户，构建时指定 uid/gid：
+
+```bash
+docker build \
+  --build-arg APP_UID=$(id -u) \
+  --build-arg APP_GID=$(id -g) \
+  -t your-name/aria2bot:latest .
+```
+
 ### 自行安装aria2
 
 aria2 一键安装脚本

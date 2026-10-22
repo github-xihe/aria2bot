@@ -1,21 +1,45 @@
-# Build stage
-FROM python:3.11.3-slim-buster AS build
+# syntax=docker/dockerfile:1
 
-# Copy only the requirements file first to leverage Docker cache if it hasn't changed
-COPY requirements.txt /app/requirements.txt
+# ---------- build stage ----------
+FROM python:3.13-slim-trixie AS build
 
-# Install dependencies in a temporary container
-RUN python -m pip install --upgrade pip && \
-    pip3 --no-cache-dir install --user -r /app/requirements.txt
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_ROOT_USER_ACTION=ignore
 
-FROM python:3.11.3-slim-buster
-
-# Copy installed dependencies from the build stage
-COPY --from=build /root/.local /root/.local
-
-# Copy the rest of the application files
-COPY . /app
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
-# -u print打印出来
-CMD ["/bin/bash", "-c", "set -e && python3 -u app.py"]
+COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel \
+ && pip install -r requirements.txt
+
+# ---------- runtime stage ----------
+FROM python:3.13-slim-trixie
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TZ=Asia/Shanghai \
+    PATH="/opt/venv/bin:$PATH"
+
+# ffmpeg: 生成视频缩略图（util.imgCoverFromFile 调用）
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg ca-certificates tzdata \
+ && rm -rf /var/lib/apt/lists/*
+
+# 非 root 运行；如需匹配宿主机用户，构建时传 --build-arg APP_UID=$(id -u) APP_GID=$(id -g)
+ARG APP_UID=1000
+ARG APP_GID=1000
+RUN groupadd -g "${APP_GID}" aria2bot \
+ && useradd -u "${APP_UID}" -g "${APP_GID}" -m -s /usr/sbin/nologin aria2bot
+
+COPY --from=build /opt/venv /opt/venv
+
+WORKDIR /app
+COPY --chown=aria2bot:aria2bot . .
+RUN mkdir -p /app/db && chown -R aria2bot:aria2bot /app
+
+USER aria2bot
+
+CMD ["python", "-u", "app.py"]

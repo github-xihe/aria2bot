@@ -1,0 +1,14 @@
+.git
+.gitignore
+.github
+__pycache__
+*.py[cod]
+*.egg-info
+.venv
+venv
+img.png
+
+# 不要把真实配置/会话文件打进镜像
+db/config.yml
+db/*.session
+db/bot.session

@@ -1,10 +1,13 @@
-version: "3.7"
 services:
   aria2bot:
-    image: jwstar/aria2bot
+    # 改成你自己的 Docker Hub 仓库，例如 ghcr.io/your-name/aria2bot:latest
+    image: YOUR_DOCKERHUB_USER/aria2bot:latest
     network_mode: host
     container_name: aria2bot
     restart: always
+    # 镜像内默认以 uid/gid 1000 运行；请确保 ./db 归该用户所有：
+    #   sudo chown -R 1000:1000 ./db
+    user: "1000:1000"
     volumes:
       - ./db:/app/db
       - /root/downloads:/root/downloads
