@@ -200,16 +200,23 @@ class AsyncAria2Client:
                         partial_callback = functools.partial(callback, gid=gid)
                         if '.mp4' in path:
                             pat, filename = os.path.split(path)
-                            # 截图
-                            await imgCoverFromFile(path, path + '.jpg')
+                            thumb_path = pat + '/' + filename + '.jpg'
+                            thumb = None
+                            # ffmpeg 为可选组件：镜像未安装时降级为无缩略图上传
+                            try:
+                                await imgCoverFromFile(path, thumb_path)
+                                thumb = thumb_path
+                            except Exception as e:
+                                print(f'生成缩略图失败（已跳过）: {e}')
                             await self.bot.send_file(ADMIN_ID,
                                                      path,
-                                                     thumb=pat + '/' + filename + '.jpg',
+                                                     thumb=thumb,
                                                      supports_streaming=True,
                                                      progress_callback=partial_callback
                                                      )
                             await msg.delete()
-                            os.unlink(pat + '/' + filename + '.jpg')
+                            if thumb and os.path.exists(thumb):
+                                os.unlink(thumb)
                             os.unlink(path)
                         else:
                             temp_msg = await self.bot.send_file(ADMIN_ID,

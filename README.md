@@ -78,7 +78,7 @@ docker compose logs -f --tail=4000
 - 基础镜像：`python:3.13-slim-trixie`（Debian 13），替换已 EOL 的 `python:3.11.3-slim-buster`
 - 依赖升级并锁定：`aiohttp 3.14.5` / `telethon 1.45.0` / `websockets 13.1`（去掉代码中未使用的 `websocket-client`、`async_timeout`）
 - 容器内以非 root 用户 `aria2bot`（uid/gid 1000）运行
-- 内置 ffmpeg 7.1，用于生成视频缩略图
+- 不内置 ffmpeg（Debian 版会额外拖入 mesa/LLVM 等 400MB+ 依赖）：mp4 上传时若系统无 ffmpeg，自动降级为无缩略图发送；需要缩略图可自行在镜像里加 ffmpeg 或在宿主机挂载静态版
 - 构建采用多阶段 + venv，镜像内不含编译工具链
 
 非 root 运行要求 `./db` 对该用户可写（Telegram 会话文件会写成 `db/bot.session`）：

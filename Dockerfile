@@ -23,9 +23,10 @@ ENV PYTHONUNBUFFERED=1 \
     TZ=Asia/Shanghai \
     PATH="/opt/venv/bin:$PATH"
 
-# ffmpeg: 生成视频缩略图（util.imgCoverFromFile 调用）
+# 不安装 ffmpeg（Debian 版会拖入 mesa/LLVM 等 400MB+ 依赖）；
+# mp4 上传时若系统无 ffmpeg，会自动降级为无缩略图发送，见 async_aria2_client.py
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg ca-certificates tzdata \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata \
  && rm -rf /var/lib/apt/lists/*
 
 # 非 root 运行；如需匹配宿主机用户，构建时传 --build-arg APP_UID=$(id -u) APP_GID=$(id -g)
