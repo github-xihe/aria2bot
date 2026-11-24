@@ -1,11 +1,9 @@
 import asyncio
-import base64
 import datetime
 import logging
 import re
 import shutil
 from typing import Any
-from urllib.parse import urlparse
 
 import python_socks
 
@@ -15,8 +13,11 @@ from telethon.tl.functions.bots import SetBotCommandsRequest
 from telethon.tl.types import BotCommand, BotCommandScopeDefault, Message
 
 from async_aria2_client import AsyncAria2Client
-from configer import API_ID, API_HASH, PROXY_IP, PROXY_PORT, BOT_TOKEN, ADMIN_ID, RPC_SECRET, RPC_URL, ARIANG_BASE
-from util import get_file_name, progress, byte2_readable, hum_convert
+from configer import (API_ID, API_HASH, PROXY_IP, PROXY_PORT, BOT_TOKEN, ADMIN_ID, RPC_SECRET,
+                      RPC_URL, ARIANG_BASE, ARIANG_SHARE_SECRET)
+from util import (get_file_name, progress, byte2_readable, hum_convert,
+                  escape_html, is_admin, truncate_label,
+                  is_safe_clean_path, build_aria2_web_reply)
 
 coloredlogs.install(level='INFO')
 log = logging.getLogger('bot')
@@ -34,15 +35,9 @@ async def handler(event):
 
 @bot.on(events.NewMessage(pattern="/web", from_users=ADMIN_ID))
 async def handler(event):
-    base_key = base64.b64encode(RPC_SECRET.encode("utf-8")).decode('utf-8')
-    # RPC_URL 形如 127.0.0.1:6808/jsonrpc；AriaNg 深链需要 host/port/path 分开
-    host_port, _, rpc_path = RPC_URL.partition('/')
-    rpc_port = host_port.partition(':')[2] or '6808'
-    # 手机点开时 127.0.0.1 指向手机自己，改用 AriaNg 所在主机的地址
-    ws_host = urlparse(ARIANG_BASE).hostname or host_port.partition(':')[0]
-    await event.respond(
-        f'{ARIANG_BASE.rstrip("/")}/#!/settings/rpc/set/ws/{ws_host}/{rpc_port}/{rpc_path}/{base_key}'
-    )
+    # 默认不下发密钥：深链里的 base64 密钥会永久留在 Telegram 云端聊天记录里
+    message, _ = build_aria2_web_reply(RPC_URL, ARIANG_BASE, RPC_SECRET, ARIANG_SHARE_SECRET)
+    await event.respond(message)
 
 
 @bot.on(events.NewMessage(pattern="/info", from_users=ADMIN_ID))
@@ -147,13 +142,43 @@ def get_media_from_message(message: "Message") -> Any:
 
 
 async def remove_all(event):
-    # 过滤 已完成或停止
+    """清空已完成任务 + 删除下载目录：先做路径白名单校验，再让管理员二次确认。"""
+    tasks = await client.tell_stopped(0, 500)
+    result = await client.get_global_option()
+    target = result.get('dir', '')
+
+    ok, reason = is_safe_clean_path(target)
+    if not ok:
+        await event.respond(
+            f'已拒绝清空：下载目录 {escape_html(target)} 未通过安全检查（{reason}）。\n'
+            '如确需清空，请先用 /path 把目录设为专用的下载目录。',
+            parse_mode='html'
+        )
+        return
+
+    await event.respond(
+        f'将要删除 {len(tasks)} 条已完成/停止任务，并清空目录：\n{escape_html(target)}\n'
+        '该操作不可撤销（目录内所有文件都会被删除）。',
+        parse_mode='html',
+        buttons=[[Button.inline('确认清空', b'clear-all.ok'),
+                  Button.inline('取消', b'clear-all.cancel')]],
+    )
+
+
+async def do_remove_all(event):
+    """二次确认后的实际清空动作，执行前再校验一次路径。"""
+    result = await client.get_global_option()
+    target = result.get('dir', '')
+    ok, reason = is_safe_clean_path(target)
+    if not ok:
+        await event.respond(f'清空已中止：{reason}')
+        return
+
     tasks = await client.tell_stopped(0, 500)
     for task in tasks:
         await client.remove_download_result(task['gid'])
-    result = await client.get_global_option()
-    print('清空目录 ', result['dir'])
-    shutil.rmtree(result['dir'], ignore_errors=True)
+    log.info('清空目录 %s，删除任务 %s 条', target, len(tasks))
+    shutil.rmtree(target, ignore_errors=True)
     await event.respond('任务已清空,所有文件已删除', parse_mode='html')
 
 
@@ -167,7 +192,7 @@ async def unpause_task(event):
     for task in tasks:
         file_name = get_file_name(task)
         gid = task['gid']
-        buttons.append([Button.inline(file_name, 'unpause-task.' + gid)])
+        buttons.append([Button.inline(truncate_label(file_name), 'unpause-task.' + gid)])
     await event.respond('请选择要恢复▶️的任务', parse_mode='html', buttons=buttons)
 
 
@@ -189,7 +214,7 @@ async def remove_task(event):
     for task in temp_task:
         file_name = get_file_name(task)
         gid = task['gid']
-        buttons.append([Button.inline(file_name, 'del-task.' + gid)])
+        buttons.append([Button.inline(truncate_label(file_name), 'del-task.' + gid)])
     await event.respond('请选择要删除❌ 的任务', parse_mode='html', buttons=buttons)
 
 
@@ -202,7 +227,7 @@ async def stop_task(event):
     for task in tasks:
         fileName = get_file_name(task)
         gid = task['gid']
-        buttons.append([Button.inline(fileName, 'pause-task.' + gid)])
+        buttons.append([Button.inline(truncate_label(fileName), 'pause-task.' + gid)])
 
     await event.respond('请选择要暂停⏸️的任务', parse_mode='html', buttons=buttons)
 
@@ -224,7 +249,8 @@ async def downloading(event):
         size = byte2_readable(int(totalLength))
         speed = hum_convert(int(downloadSpeed))
 
-        send_msg = send_msg + '任务名称: <b>' + fileName + '</b>\n进度: ' + prog + '\n大小: ' + size + '\n速度: ' + speed + '/s\n\n'
+        send_msg = (send_msg + '任务名称: <b>' + escape_html(fileName) + '</b>\n进度: ' + prog
+                   + '\n大小: ' + size + '\n速度: ' + speed + '/s\n\n')
     if send_msg == '':
         await event.respond('个别任务无法识别名称，请使用aria2Ng查看', parse_mode='html')
         return
@@ -245,7 +271,8 @@ async def waiting(event):
         prog = progress(int(totalLength), int(completedLength))
         size = byte2_readable(int(totalLength))
         speed = hum_convert(int(downloadSpeed))
-        send_msg = send_msg + '任务名称: ' + fileName + '\n进度: ' + prog + '\n大小: ' + size + '\n速度: ' + speed + '\n\n'
+        send_msg = (send_msg + '任务名称: ' + escape_html(fileName) + '\n进度: ' + prog
+                   + '\n大小: ' + size + '\n速度: ' + speed + '\n\n')
     await event.respond(send_msg, parse_mode='html')
 
 
@@ -263,24 +290,42 @@ async def stoped(event):
         prog = progress(int(totalLength), int(completedLength))
         size = byte2_readable(int(totalLength))
         speed = hum_convert(int(downloadSpeed))
-        send_msg = send_msg + '任务名称: ' + fileName + '\n进度: ' + prog + '\n大小: ' + size + '\n速度: ' + speed + '\n\n'
+        send_msg = (send_msg + '任务名称: ' + escape_html(fileName) + '\n进度: ' + prog
+                   + '\n大小: ' + size + '\n速度: ' + speed + '\n\n')
     await event.respond(send_msg, parse_mode='html')
 
 
 @events.register(events.CallbackQuery)
 async def BotCallbackHandler(event):
-    d = str(event.data, encoding="utf-8")
-    [type, gid] = d.split('.', 1)
-    if type == 'pause-task':
+    # inline 按钮的回调同样要鉴权：没有这一步，任何拿到按钮的人都能暂停/删除任务
+    if not is_admin(event.sender_id, ADMIN_ID):
+        await event.answer('无权限', alert=True)
+        log.warning('拒绝非管理员回调: sender_id=%s data=%r', event.sender_id, event.data)
+        return
+
+    try:
+        action, gid = str(event.data, encoding="utf-8").split('.', 1)
+    except ValueError:
+        await event.answer('无效的操作', alert=True)
+        return
+
+    await event.answer()
+
+    if action == 'pause-task':
         await client.pause(gid)
-    elif type == 'unpause-task':
+    elif action == 'unpause-task':
         await client.unpause(gid)
-    elif type == 'del-task':
+    elif action == 'del-task':
         data = await client.remove(gid)
         if 'error' in data:
             await bot.send_message(ADMIN_ID, data['error']['message'])
         else:
             await bot.send_message(ADMIN_ID, '删除成功')
+    elif action == 'clear-all':
+        if gid == 'ok':
+            await do_remove_all(event)
+        else:
+            await event.respond('已取消清空')
 
 
 def get_menu():
