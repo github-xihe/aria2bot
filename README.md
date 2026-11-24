@@ -34,6 +34,8 @@ RPC_SECRET: xxxxxxx
 RPC_URL: xxxxxx:6800/jsonrpc
 #AriaNg 前端地址（/web 命令生成深链用）；留空回退 http://127.0.0.1:6880
 ARIANG_BASE: http://192.168.1.10:6880
+#/web 是否下发内嵌 base64(RPC_SECRET) 的深链，默认 false（只给地址+脱敏密钥，需手动填写）
+ARIANG_SHARE_SECRET: false
 
 #代理ip 不需要留空,目前代理只支持代理bot，aria2c 连接不支持代理目前
 PROXY_IP: 
@@ -76,7 +78,7 @@ docker compose logs -f --tail=4000
 
 - 预构建镜像：`ghcr.io/github-xihe/aria2bot:latest`（linux/amd64）
 - 基础镜像：`python:3.13-alpine`（Alpine 3.24），替换已 EOL 的 `python:3.11.3-slim-buster`；镜像约 65MB
-- 依赖升级并锁定：`aiohttp 3.14.5` / `telethon 1.45.0` / `websockets 13.1`（去掉代码中未使用的 `websocket-client`、`async_timeout`）
+- 依赖升级并锁定：`aiohttp 3.14.5` / `telethon 1.46.0` / `websockets 17.4` / `PyYAML 6.0.4` / `python-socks 3.2.2`（去掉代码中未使用的 `websocket-client`、`async_timeout`）
 - 容器内以非 root 用户 `aria2bot`（uid/gid 1000）运行
 - 不内置 ffmpeg（Debian 版会额外拖入 mesa/LLVM 等 400MB+ 依赖）：mp4 上传时若系统无 ffmpeg，自动降级为无缩略图发送；需要缩略图可自行在镜像里加 ffmpeg 或在宿主机挂载静态版
 - 构建采用多阶段 + venv；运行镜像已剔除 pip/setuptools/wheel 与 .pyc，不含编译工具链
@@ -95,6 +97,16 @@ docker build \
   --build-arg APP_GID=$(id -g) \
   -t your-name/aria2bot:latest .
 ```
+
+### 安全说明（2026-11 加固）
+
+- **回调鉴权**：所有 inline 按钮回调都会校验 `ADMIN_ID`，非管理员点击只会收到「无权限」，不会暂停/删除任务。
+- **/web 默认不下发密钥**：默认只返回 AriaNg 地址、RPC 地址和脱敏后的密钥提示；需要一键深链时显式设置 `ARIANG_SHARE_SECRET: true`，此时密钥（base64）会留在 Telegram 聊天记录里，请自行评估。
+- **消息转义**：种子名/文件名来自下载源，进入 `parse_mode='html'` 消息前统一做 HTML 转义，避免 `<a href>` 之类标签注入。
+- **清空目录需二次确认 + 路径白名单**：`❌ ❌ 清空已完成/停止` 会先校验下载目录（拒绝 `/`、`/etc`、`/root`、家目录、软链接指向的系统目录等），再要求点按钮确认；`/path` 请只指向专用下载目录。
+- **配置解析**：`config.yml` 使用 `yaml.safe_load`，不再使用 `FullLoader`。
+- **CI 供应链**：GitHub Actions 全部固定到 commit SHA，并启用 Dependabot 跟踪 pip / actions / docker 更新。
+- 单元测试：`python -m unittest discover -s tests -v`（仅标准库，新增 `tests/test_util.py`）。
 
 ### 自行安装aria2
 
